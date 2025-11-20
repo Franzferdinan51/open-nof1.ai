@@ -14,7 +14,7 @@ import {
   ChartTooltip,
 } from "@/components/ui/chart";
 import { MetricData } from "@/lib/types/metrics";
-import { ArcticonsDeepseek } from "@/lib/icons";
+import { Bot } from "lucide-react";
 
 interface MetricsChartProps {
   metricsData: MetricData[];
@@ -26,14 +26,14 @@ interface MetricsChartProps {
 const chartConfig = {
   totalCashValue: {
     label: "Cash Value",
-    color: "#0066FF", // Deepseek 蓝色
+    color: "#0066FF", // Primary Blue
   },
 } satisfies ChartConfig;
 
-// Deepseek 品牌色
-const DEEPSEEK_BLUE = "#0066FF";
+// Brand Color
+const PRIMARY_BLUE = "#0066FF";
 
-// 自定义最后一个点的渲染（带动画）
+// Custom Dot Rendering
 interface CustomDotProps {
   cx?: number;
   cy?: number;
@@ -45,7 +45,7 @@ interface CustomDotProps {
 const CustomDot = (props: CustomDotProps) => {
   const { cx, cy, index, payload, dataLength } = props;
 
-  // 只在最后一个点显示 logo 和价格
+  // Only show logic on the last point
   if (!payload || !cx || !cy || index !== dataLength - 1) {
     return null;
   }
@@ -56,40 +56,38 @@ const CustomDot = (props: CustomDotProps) => {
     maximumFractionDigits: 2,
   })}`;
 
-  // CustomDot 必须返回 SVG 元素，因为它是在 recharts 的 SVG 上下文中渲染的
-  // 可以使用 <g> 包裹多个 SVG 元素，或使用 <foreignObject> 嵌入 HTML
   return (
     <g>
-      {/* 动画圆圈 - 纯 SVG */}
+      {/* Animated Circle - Pure SVG */}
       <circle
         cx={cx}
         cy={cy}
         r={20}
-        fill={DEEPSEEK_BLUE}
+        fill={PRIMARY_BLUE}
         opacity={0.2}
         className="animate-ping"
       />
-      {/* 主圆点 - 纯 SVG */}
+      {/* Main Dot - Pure SVG */}
       <circle
         cx={cx}
         cy={cy}
         r={8}
-        fill={DEEPSEEK_BLUE}
+        fill={PRIMARY_BLUE}
         stroke="#fff"
         strokeWidth={2}
       />
 
-      {/* Logo 和价格容器 - 使用 foreignObject 嵌入 HTML/React 组件 */}
+      {/* Logo and Price Container - using foreignObject to embed HTML/React components */}
       <foreignObject x={cx + 15} y={cy - 30} width={180} height={60}>
         <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2 shadow-lg">
-          {/* Deepseek Logo */}
+          {/* Generic Bot Logo */}
           <div className="relative w-10 h-10 rounded-full bg-[#0066FF] flex items-center justify-center flex-shrink-0">
-            <ArcticonsDeepseek className="w-6 h-6 text-black" />
+            <Bot className="w-6 h-6 text-white" />
           </div>
-          {/* 价格 */}
+          {/* Price */}
           <div className="flex flex-col">
             <div className="text-[10px] text-muted-foreground font-medium">
-              Deepseek
+              Bot Value
             </div>
             <div className="text-sm font-mono font-bold whitespace-nowrap">
               {priceText}
@@ -181,9 +179,9 @@ export function MetricsChart({
                   return (
                     <div className="rounded-lg border bg-background p-3 shadow-xl">
                       <div>
-                        <ArcticonsDeepseek className="w-10 h-10 text-blue-500" />
+                        <Bot className="w-10 h-10 text-blue-500" />
                         <span className="text-sm font-mono font-bold">
-                          Deepseek-R1-0528
+                          Trading Bot
                         </span>
                       </div>
                       <div className="text-xs text-muted-foreground mb-2">
@@ -222,14 +220,14 @@ export function MetricsChart({
               <Line
                 dataKey="totalCashValue"
                 type="monotone"
-                stroke={DEEPSEEK_BLUE}
+                stroke={PRIMARY_BLUE}
                 strokeWidth={2}
                 dot={(props) => (
                   <CustomDot {...props} dataLength={metricsData.length} />
                 )}
                 activeDot={{
                   r: 6,
-                  fill: DEEPSEEK_BLUE,
+                  fill: PRIMARY_BLUE,
                   stroke: "#fff",
                   strokeWidth: 2,
                 }}
