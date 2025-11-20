@@ -98,13 +98,10 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold tracking-tight">
-              Open Nof1.ai
-              <span className="text-muted-foreground text-sm ml-2">
-                inspired by Alpha Arena
-              </span>
+              OpenTradingBot
             </h1>
             <p className="text-muted-foreground mt-2">
-              Real-time trading metrics and performance
+              Autonomous Multi-Model Trading Platform
             </p>
           </div>
           {lastUpdate && (
@@ -118,7 +115,7 @@ export default function Home() {
         {/* Navigation */}
         <div className="flex gap-8 border-b pb-4">
           <button className="text-sm font-medium border-b-2 border-primary pb-2">
-            LIVE
+            LIVE DASHBOARD
           </button>
         </div>
 
@@ -182,8 +179,7 @@ export default function Home() {
 
         {/* Footer */}
         <div className="text-center text-sm text-muted-foreground pt-8 border-t">
-          <p>HIGHEST: 🏆 DEEPSEEK CHAT</p>
-          <p className="mt-2">nof1.ai - Real-time AI Trading Platform</p>
+          <p className="mt-2">OpenTradingBot - Autonomous Trading</p>
         </div>
       </div>
     </div>
