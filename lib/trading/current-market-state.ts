@@ -1,5 +1,5 @@
 import { EMA, MACD, RSI, ATR } from "technicalindicators";
-import { binance } from "./binance";
+import { exchange } from "./exchange";
 
 export interface MarketState {
   // Current indicators
@@ -8,14 +8,14 @@ export interface MarketState {
   current_macd: number;
   current_rsi: number;
 
-  // Open Interest
-  open_interest: {
+  // Open Interest (Optional for Spot)
+  open_interest?: {
     latest: number;
     average: number;
   };
 
-  // Funding Rate
-  funding_rate: number;
+  // Funding Rate (Optional for Spot)
+  funding_rate?: number;
 
   // Intraday series (by minute)
   intraday: {
@@ -97,11 +97,11 @@ export async function getCurrentMarketState(
   symbol: string
 ): Promise<MarketState> {
   try {
-    // Normalize symbol format for Binance
+    // Normalize symbol format
     const normalizedSymbol = symbol.includes("/") ? symbol : `${symbol}/USDT`;
 
     // Fetch 1-minute OHLCV data (last 100 candles for intraday analysis)
-    const ohlcv1m = await binance.fetchOHLCV(
+    const ohlcv1m = await exchange.fetchOHLCV(
       normalizedSymbol,
       "1m",
       undefined,
@@ -109,7 +109,7 @@ export async function getCurrentMarketState(
     );
 
     // Fetch 4-hour OHLCV data (last 100 candles for longer-term context)
-    const ohlcv4h = await binance.fetchOHLCV(
+    const ohlcv4h = await exchange.fetchOHLCV(
       normalizedSymbol,
       "4h",
       undefined,
@@ -156,24 +156,32 @@ export async function getCurrentMarketState(
     const current_macd = Number(macd_1m[macd_1m.length - 1]) || 0;
     const current_rsi = Number(rsi7_1m[rsi7_1m.length - 1]) || 0;
 
-    // Fetch open interest and funding rate for perpetual futures
+    // Fetch open interest and funding rate (Optional for Spot)
     const openInterestData = { latest: 0, average: 0 };
     let fundingRate = 0;
+    let hasFuturesData = false;
 
     try {
-      // Try to fetch open interest
-      const perpSymbol = normalizedSymbol.replace("/", "");
-      const openInterest = await binance.fetchOpenInterest(perpSymbol);
+      if (typeof exchange.fetchOpenInterest === "function") {
+        const perpSymbol = normalizedSymbol.replace("/", "");
+        const openInterest = await exchange.fetchOpenInterest(perpSymbol);
 
-      if (openInterest && typeof openInterest.openInterestAmount === "number") {
-        openInterestData.latest = openInterest.openInterestAmount;
-        openInterestData.average = openInterest.openInterestAmount; // Using same value as average
+        if (
+          openInterest &&
+          typeof openInterest.openInterestAmount === "number"
+        ) {
+          openInterestData.latest = openInterest.openInterestAmount;
+          openInterestData.average = openInterest.openInterestAmount;
+          hasFuturesData = true;
+        }
       }
 
-      // Try to fetch funding rate
-      const fundingRates = await binance.fetchFundingRate(normalizedSymbol);
-      if (fundingRates && typeof fundingRates.fundingRate === "number") {
-        fundingRate = fundingRates.fundingRate;
+      if (typeof exchange.fetchFundingRate === "function") {
+        const fundingRates = await exchange.fetchFundingRate(normalizedSymbol);
+        if (fundingRates && typeof fundingRates.fundingRate === "number") {
+          fundingRate = fundingRates.fundingRate;
+          hasFuturesData = true;
+        }
       }
     } catch (error) {
       console.warn("Could not fetch open interest or funding rate:", error);
@@ -190,8 +198,8 @@ export async function getCurrentMarketState(
       current_ema20,
       current_macd,
       current_rsi,
-      open_interest: openInterestData,
-      funding_rate: fundingRate,
+      open_interest: hasFuturesData ? openInterestData : undefined,
+      funding_rate: hasFuturesData ? fundingRate : undefined,
       intraday: {
         mid_prices: last10MidPrices,
         ema_20: last10EMA20,
@@ -220,7 +228,7 @@ export async function getCurrentMarketState(
  * Format market state as a human-readable string
  */
 export function formatMarketState(state: MarketState): string {
-  return `
+  let output = `
 Current Market State:
 current_price = ${
     state.current_price
@@ -229,14 +237,21 @@ current_price = ${
   )}, current_macd = ${state.current_macd.toFixed(
     3
   )}, current_rsi (7 period) = ${state.current_rsi.toFixed(3)}
+`.trim();
 
-In addition, here is the latest BTC open interest and funding rate for perps:
+  if (state.open_interest && state.funding_rate !== undefined) {
+    output += `
+
+In addition, here is the latest BTC open interest and funding rate:
 
 Open Interest: Latest: ${state.open_interest.latest.toFixed(
-    2
-  )} Average: ${state.open_interest.average.toFixed(2)}
+      2
+    )} Average: ${state.open_interest.average.toFixed(2)}
 
-Funding Rate: ${state.funding_rate.toExponential(2)}
+Funding Rate: ${state.funding_rate.toExponential(2)}`;
+  }
+
+  output += `
 
 Intraday series (by minute, oldest → latest):
 
@@ -275,5 +290,6 @@ MACD indicators: [${state.longer_term.macd.map((v) => v.toFixed(3)).join(", ")}]
 RSI indicators (14‑Period): [${state.longer_term.rsi_14
     .map((v) => v.toFixed(3))
     .join(", ")}]
-`.trim();
+`;
+  return output.trim();
 }

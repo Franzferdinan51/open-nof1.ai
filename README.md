@@ -1,40 +1,36 @@
-# 🤖 Open-nof1.ai
+# 🤖 OpenTradingBot
 
-> An open-source implementation of [nof1.ai](https://nof1.ai)'s Alpha Arena - A benchmark platform for evaluating AI models' cryptocurrency trading capabilities with real money in real markets.
+> An open-source, multi-model autonomous trading platform compatible with Exbitron and various AI providers.
 
-![Screenshot 2](./screen-shot-2.png)
+![Screenshot](./screenshot.png)
 
-## 🌟 What is Alpha Arena?
+## 🌟 What is OpenTradingBot?
 
-Alpha Arena is a revolutionary benchmark that tests AI models where it matters most: **real financial markets with real money**. Unlike traditional AI benchmarks that rely on static datasets, Alpha Arena evaluates AI models by giving each one an initial capital of $10,000 and letting them trade cryptocurrency perpetual contracts on live markets.
+OpenTradingBot is a flexible trading platform designed to let AI models trade cryptocurrency autonomously. It is built to be model-agnostic, allowing you to deploy various LLMs as trading agents on the **Exbitron** exchange (Spot).
 
-**Why markets are the ultimate test of intelligence:**
-- Markets are dynamic, adversarial, and open-ended
-- They challenge AI in ways that static benchmarks cannot
-- Real-time decision-making under uncertainty reveals true capabilities
-- Risk management and strategic thinking are essential
+Whether you want to run state-of-the-art cloud models like GPT-4o and DeepSeek, or run completely local models via LM Studio, OpenTradingBot provides the infrastructure to manage market data, execute trades, and track performance.
 
 ## 🎯 Features
 
-This open-source implementation currently focuses on running the **DeepSeek** trading model with the following capabilities:
-
-- 🔄 **Real-time Trading**: Automated cryptocurrency trading on Binance via CCXT
-- 📊 **Live Dashboard**: Beautiful real-time charts showing account performance
-- 🧠 **AI Decision Making**: Complete chain-of-thought reasoning for every trade
-- 💹 **Multi-Asset Support**: Trade BTC, ETH, SOL, BNB, and DOGE
-- 📈 **Performance Tracking**: Detailed metrics, trade history, and profit/loss tracking
-- 🔍 **Full Transparency**: Every decision, prompt, and reasoning is logged and visible
-- ⚡ **Cron Jobs**: Automated 20-second metric collection and 3-minute trading intervals
+- 🔄 **Exbitron Integration**: Optimized for Spot trading on Exbitron.
+- 🧠 **Multi-Model Support**:
+  - **DeepSeek R1** (via OpenRouter)
+  - **OpenAI GPT-4o**
+  - **Google Gemini 1.5 Pro**
+  - **Local Models** (via LM Studio / OpenAI Compatible API)
+- 🤖 **Optional Multi-Bot Support**: Run single or multiple bot instances with different strategies or models.
+- 📊 **Real-time Dashboard**: Monitor portfolio performance, active trades, and AI reasoning logs.
+- 🔍 **Transparent Decision Making**: Every trade includes a "Chain of Thought" log explaining the AI's reasoning.
+- 🌗 **Automatic Dark Mode**: UI adapts to your system preference.
 
 ## 🏗️ Tech Stack
 
-- **Framework**: [Next.js 15](https://nextjs.org/) with App Router & Turbopack
-- **AI SDK**: [Vercel AI SDK](https://sdk.vercel.ai/) with DeepSeek integration
+- **Framework**: [Next.js 15](https://nextjs.org/)
+- **AI SDK**: [Vercel AI SDK](https://sdk.vercel.ai/)
 - **Database**: PostgreSQL with [Prisma ORM](https://www.prisma.io/)
-- **Trading**: [CCXT](https://github.com/ccxt/ccxt) for exchange connectivity
-- **Charts**: [Recharts](https://recharts.org/) with [shadcn/ui](https://ui.shadcn.com/)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
-- **Runtime**: [Bun](https://bun.sh/) for fast package management
+- **Trading Engine**: Custom adapter for Exbitron (expandable to CCXT)
+- **Runtime**: [Bun](https://bun.sh/)
+- **Styling**: Tailwind CSS v4 with `next-themes`
 
 ## 🚀 Getting Started
 
@@ -42,15 +38,15 @@ This open-source implementation currently focuses on running the **DeepSeek** tr
 
 - [Bun](https://bun.sh/) installed
 - PostgreSQL database
-- Binance API credentials (for live trading)
-- DeepSeek API key
+- Exbitron API credentials
+- API Key for your chosen AI provider (or a running local model)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/snowingfox/open-nof1.ai.git
-   cd open-nof1.ai
+   git clone https://github.com/yourusername/open-trading-bot.git
+   cd open-trading-bot
    ```
 
 2. **Install dependencies**
@@ -69,24 +65,30 @@ This open-source implementation currently focuses on running the **DeepSeek** tr
    NEXT_PUBLIC_URL="http://localhost:3000"
 
    # Database
-   DATABASE_URL="postgresql://postgres:password@localhost:5432/nof1"
+   DATABASE_URL="postgresql://postgres:password@localhost:5432/opentradingbot"
 
-   # AI Models
-   DEEPSEEK_API_KEY="your_deepseek_api_key"
-   OPENROUTER_API_KEY="your_openrouter_api_key"  # Optional: for additional models
-   
-   # Market Research (Optional)
-   EXA_API_KEY="your_exa_api_key"  # For enhanced market analysis
-
-   # Trading (Binance)
-   BINANCE_API_KEY="your_binance_api_key"
-   BINANCE_API_SECRET="your_binance_secret"
-   BINANCE_USE_SANDBOX="true"  # Set to "false" for live trading
-   
    # Trading Configuration
-   START_MONEY=10000  # Initial capital in USDT (e.g., 10000 = $10,000 USDT)
+   START_MONEY=100         # Initial capital in USDT
+   ACTIVE_MODEL="deepseek" # Options: deepseek, openai, gemini, local, agentevolver
+   
+   # Exchange (Exbitron)
+   EXBITRON_API_KEY="your_exbitron_key"
+   EXBITRON_API_SECRET="your_exbitron_secret"
 
-   # Cron Job Authentication
+   # AI Model Keys (Fill the one matching ACTIVE_MODEL)
+   DEEPSEEK_API_KEY=""
+   OPENROUTER_API_KEY=""
+   OPENAI_API_KEY=""
+   GOOGLE_GENERATIVE_AI_API_KEY=""
+   
+   # Local Model Config (if ACTIVE_MODEL="local")
+   LOCAL_LLM_BASE_URL="http://localhost:1234/v1" # Default for LM Studio
+   LOCAL_MODEL_ID="llama-3-8b-instruct"          # The ID used by your local server
+
+   # AgentEvolver Config (if ACTIVE_MODEL="agentevolver")
+   AGENT_EVOLVER_URL="http://localhost:8000"
+
+   # Security
    CRON_SECRET_KEY="your_secret_token"
    ```
 
@@ -101,130 +103,50 @@ This open-source implementation currently focuses on running the **DeepSeek** tr
    bun dev
    ```
 
-6. **Set up cron jobs** (for automated trading)
+6. **Set up cron jobs**
 
-   You'll need to set up external cron jobs or use a service like [Vercel Cron](https://vercel.com/docs/cron-jobs) to call these endpoints:
+   To enable autonomous trading, set up cron jobs to hit these endpoints:
 
-   - `POST /api/cron/20-seconds-metrics-interval` - Collect metrics every 20 seconds
-   - `POST /api/cron/3-minutes-run-interval` - Execute trading logic every 3 minutes
+   - `POST /api/cron/20-seconds-metrics-interval` - Collects account metrics
+   - `POST /api/cron/3-minutes-run-interval` - Triggers the AI trading logic
 
-   Example crontab:
-   ```bash
-   # Metrics collection (every 20 seconds)
-   * * * * * curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET_KEY"
-   * * * * * sleep 20 && curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET_KEY"
-   * * * * * sleep 40 && curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET_KEY"
+## 🧠 Using Local Models (LM Studio)
 
-   # Trading execution (every 3 minutes)
-   */3 * * * * curl -X POST http://localhost:3000/api/cron/3-minutes-run-interval -H "Authorization: Bearer YOUR_CRON_SECRET_KEY"
+You can run OpenTradingBot completely privately using local LLMs:
+
+1. Download and install [LM Studio](https://lmstudio.ai/).
+2. Load a model (e.g., Llama 3, Mistral).
+3. Start the **Local Inference Server** in LM Studio (usually on port 1234).
+4. Set `.env` variables:
+   ```env
+   ACTIVE_MODEL="local"
+   LOCAL_LLM_BASE_URL="http://localhost:1234/v1"
    ```
+5. The bot will now use your local machine for reasoning!
 
-Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
+## 🤖 Using AgentEvolver (Python Service)
 
-## 📁 Project Structure
+To use the self-evolving agent framework:
 
-```
-open-nof1.ai/
-├── app/
-│   ├── api/
-│   │   ├── cron/              # Automated job endpoints
-│   │   ├── metrics/           # Metrics data API
-│   │   ├── pricing/           # Crypto pricing API
-│   │   └── model/chat/        # Chat history API
-│   ├── page.tsx               # Main dashboard
-│   └── globals.css
-├── components/
-│   ├── ui/                    # shadcn/ui components
-│   ├── metrics-chart.tsx      # Account value chart
-│   ├── models-view.tsx        # Trade & chat history
-│   └── crypto-card.tsx        # Price display cards
-├── lib/
-│   ├── ai/
-│   │   ├── agent/             # AI agent logic
-│   │   ├── model.ts           # Model configurations
-│   │   ├── prompt.ts          # Trading prompts
-│   │   └── tool.ts            # AI tools/functions
-│   ├── trading/
-│   │   ├── buy.ts             # Buy execution
-│   │   ├── sell.ts            # Sell execution
-│   │   ├── current-market-state.ts
-│   │   └── account-information-and-performance.ts
-│   └── types/                 # TypeScript types
-└── prisma/
-    └── schema.prisma          # Database schema
-```
-
-## 🎮 How It Works
-
-1. **Data Collection**: Every 20 seconds, the system collects account metrics (balance, positions, PnL)
-2. **AI Decision Making**: Every 3 minutes, the AI analyzes market data and makes trading decisions
-3. **Execution**: Approved trades are executed via Binance API
-4. **Transparency**: All reasoning, prompts, and decisions are stored in the database
-5. **Visualization**: The dashboard displays real-time performance and trade history
-
-### ⚙️ Configuration
-
-**Starting Capital** (`START_MONEY`)
-- Set your initial trading capital in USDT (Tether stablecoin)
-- Example: `START_MONEY=10000` means you start with $10,000 USDT
-- Recommended for testing: Start with small amounts (e.g., `START_MONEY=30`)
-- The AI will make trading decisions based on this available capital
-- All profits and losses are calculated relative to this starting amount
-
-## 🤝 AI Models
-
-Currently supported:
-- **DeepSeek V3 Chat** - Primary trading model
-- **DeepSeek R1** - Advanced reasoning model (optional)
-
-Want to add more models? Check out the [AI SDK providers](https://sdk.vercel.ai/providers/ai-sdk-providers) and add them to `lib/ai/model.ts`!
-
-## 📊 Dashboard Features
-
-- **Live Crypto Prices**: Real-time prices for BTC, ETH, SOL, BNB, DOGE
-- **Account Performance Chart**: Interactive chart showing total account value over time
-- **Completed Trades**: Detailed history of all buy/sell operations
-- **Model Chat**: Full transparency into AI's chain-of-thought and decision-making
-- **Positions**: Current open positions (coming soon)
+1. Set up the Python environment in `python-service/`:
+   ```bash
+   cd python-service
+   pip install -r requirements.txt
+   python server.py
+   ```
+2. Set `.env` variable:
+   ```env
+   ACTIVE_MODEL="agentevolver"
+   ```
 
 ## ⚠️ Disclaimer
 
-**This is educational/research software. Trading cryptocurrencies involves substantial risk of loss.**
+**This software is for educational and research purposes only. Trading cryptocurrencies involves substantial risk of loss.**
 
-- Start with small amounts or paper trading
-- The AI model may make poor decisions
-- Past performance doesn't guarantee future results
-- You are responsible for any financial losses
-- Review and test thoroughly before using real money
-
-## 🤔 Why Open Source?
-
-The original [nof1.ai](https://nof1.ai) Alpha Arena is a closed competition. This open-source version aims to:
-
-1. **Democratize AI trading research** - Anyone can experiment with AI trading agents
-2. **Educational purposes** - Learn how AI agents make financial decisions
-3. **Transparency** - Full visibility into prompts, reasoning, and execution
-4. **Community innovation** - Improve and iterate on trading strategies together
+- Use at your own risk.
+- The developers are not responsible for financial losses.
+- Always test with small amounts first.
 
 ## 📝 License
 
-MIT License - See [LICENSE](LICENSE) file for details
-
-## 🙏 Acknowledgments
-
-- Inspired by [nof1.ai](https://nof1.ai)'s Alpha Arena
-- Built with [shadcn/ui](https://ui.shadcn.com/) components
-- Powered by [DeepSeek](https://www.deepseek.com/) AI models
-- Trading via [CCXT](https://github.com/ccxt/ccxt)
-
-## 🔗 Links
-
-- [nof1.ai Official Site](https://nof1.ai)
-- [Alpha Arena](https://nof1.ai)
-- [DeepSeek](https://www.deepseek.com/)
-
----
-
-**⚡ Built with Bun + Next.js 15 + DeepSeek + CCXT**
-
-*Markets are the ultimate test of intelligence. Let's find out if LLMs are good enough.*
+MIT License

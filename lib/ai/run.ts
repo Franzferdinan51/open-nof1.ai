@@ -2,91 +2,244 @@ import { generateObject } from "ai";
 import { generateUserPrompt, tradingPrompt } from "./prompt";
 import { getCurrentMarketState } from "../trading/current-market-state";
 import { z } from "zod";
-import { deepseekR1 } from "./model";
+import {
+  deepseekR1,
+  gpt4o,
+  gemini15Pro,
+  getLocalModel,
+  getOpenRouterModel,
+} from "./model";
 import { getAccountInformationAndPerformance } from "../trading/account-information-and-performance";
 import { prisma } from "../prisma";
 import { Opeartion, Symbol } from "@prisma/client";
+import { exchange } from "../trading/exchange";
+
+// Helper to get the model based on env config or parameter
+function getActiveModel(modelName?: string) {
+  const configuredModel = modelName || process.env.ACTIVE_MODEL || "deepseek";
+
+  switch (configuredModel.toLowerCase()) {
+    case "openai":
+    case "gpt4o":
+      return { model: gpt4o, name: "GPT-4o", type: "sdk" };
+    case "gemini":
+      return { model: gemini15Pro, name: "Gemini 1.5 Pro", type: "sdk" };
+    case "local":
+      return {
+        model: getLocalModel(process.env.LOCAL_MODEL_ID),
+        name: "Local Model",
+        type: "sdk",
+      };
+    case "agentevolver":
+      return { model: null, name: "AgentEvolver", type: "agent_evolver" };
+    case "deepseek":
+    default:
+      // Default to DeepSeek via OpenRouter as per original setup
+      return { model: deepseekR1, name: "DeepSeek R1", type: "sdk" };
+  }
+}
+
+async function callAgentEvolver(currentState: any) {
+  // Call the Python bridge
+  // Assumes python service is running on localhost:8000
+  const AGENT_EVOLVER_URL =
+    process.env.AGENT_EVOLVER_URL || "http://localhost:8000";
+  try {
+    const response = await fetch(`${AGENT_EVOLVER_URL}/act`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        price: currentState.current_price,
+        // Can add more state here
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AgentEvolver API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return {
+      opeartion: data.action, // 'Buy', 'Sell', 'Hold'
+      reasoning: data.reasoning,
+      confidence: data.confidence,
+    };
+  } catch (e) {
+    console.error("Error calling AgentEvolver:", e);
+    // Fallback to Hold
+    return { opeartion: "Hold", reasoning: "Error calling agent service." };
+  }
+}
 
 /**
  * you can interval trading using cron job
  */
-export async function run(initialCapital: number) {
-  const currentMarketState = await getCurrentMarketState("BTC/USDT");
+export async function run(
+  initialCapital: number,
+  modelOverride?: string,
+  symbol: string = "BTC"
+) {
+  // Resolve symbol string to Enum if possible, or just use BTC as default for now if dynamic
+  const prismaSymbol =
+    Object.values(Symbol).find((s) => s === symbol) || Symbol.BTC;
+  const tradingPair = `${prismaSymbol}/USDT`;
+
+  const currentMarketState = await getCurrentMarketState(tradingPair);
   const accountInformationAndPerformance =
     await getAccountInformationAndPerformance(initialCapital);
   // Count previous Chat entries to provide an invocation counter in the prompt
   const invocationCount = await prisma.chat.count();
 
-  const userPrompt = generateUserPrompt({
-    currentMarketState,
-    accountInformationAndPerformance,
-    startTime: new Date(),
-    invocationCount,
-  });
+  const {
+    model,
+    name: modelName,
+    type: modelType,
+  } = getActiveModel(modelOverride);
 
-  const { object, reasoning } = await generateObject({
-    model: deepseekR1,
-    system: tradingPrompt,
-    prompt: userPrompt,
-    output: "object",
-    mode: "json",
-    schema: z.object({
-      opeartion: z.nativeEnum(Opeartion),
-      buy: z
-        .object({
-          pricing: z.number().describe("The pricing of you want to buy in."),
-          amount: z.number(),
-          leverage: z.number().min(1).max(20),
-        })
-        .optional()
-        .describe("If opeartion is buy, generate object"),
-      sell: z
-        .object({
-          percentage: z
-            .number()
-            .min(0)
-            .max(100)
-            .describe("Percentage of position to sell"),
-        })
-        .optional()
-        .describe("If opeartion is sell, generate object"),
-      adjustProfit: z
-        .object({
-          stopLoss: z
-            .number()
-            .optional()
-            .describe("The stop loss of you want to set."),
-          takeProfit: z
-            .number()
-            .optional()
-            .describe("The take profit of you want to set."),
-        })
-        .optional()
-        .describe(
-          "If opeartion is hold and you want to adjust the profit, generate object"
-        ),
-      chat: z
-        .string()
-        .describe(
-          "The reason why you do this opeartion, and tell me your anlyaise, for example: Currently holding all my positions in ETH, SOL, XRP, BTC, DOGE, and BNB as none of my invalidation conditions have been triggered, though XRP and BNB are showing slight unrealized losses. My overall account is up 10.51% with $4927.64 in cash, so I'll continue to monitor my existing trades."
-        ),
-    }),
-  });
+  let operation: string;
+  let reasoning: string;
+  let chatContent = "<no chat>";
+  let buyParams = null;
+  let adjustParams = null;
 
-  if (object.opeartion === Opeartion.Buy) {
+  if (modelType === "agent_evolver") {
+    const decision = await callAgentEvolver(currentMarketState);
+    operation = decision.opeartion;
+    reasoning = decision.reasoning;
+    chatContent = `Confidence: ${decision.confidence}`;
+
+    // Map string op to Enum logic
+    // Basic mapping for AgentEvolver which returns simple strings
+    if (operation.toLowerCase() === "buy") {
+        buyParams = {
+            pricing: currentMarketState.current_price,
+            amount: 0.001, // Default or derived from env
+            leverage: 1
+        };
+    }
+
+  } else {
+    // Use Vercel AI SDK
+    const userPrompt = generateUserPrompt({
+      currentMarketState,
+      accountInformationAndPerformance,
+      startTime: new Date(),
+      invocationCount,
+    });
+
+    const { object, reasoning: r } = await generateObject({
+      model: model as any,
+      system: tradingPrompt,
+      prompt: userPrompt,
+      output: "object",
+      mode: "json",
+      schema: z.object({
+        opeartion: z.nativeEnum(Opeartion),
+        buy: z
+          .object({
+            pricing: z.number().describe("The pricing of you want to buy in."),
+            amount: z.number(),
+            leverage: z.number().min(1).max(20),
+          })
+          .optional()
+          .describe("If opeartion is buy, generate object"),
+        sell: z
+          .object({
+            percentage: z
+              .number()
+              .min(0)
+              .max(100)
+              .describe("Percentage of position to sell"),
+          })
+          .optional()
+          .describe("If opeartion is sell, generate object"),
+        adjustProfit: z
+          .object({
+            stopLoss: z
+              .number()
+              .optional()
+              .describe("The stop loss of you want to set."),
+            takeProfit: z
+              .number()
+              .optional()
+              .describe("The take profit of you want to set."),
+          })
+          .optional()
+          .describe(
+            "If opeartion is hold and you want to adjust the profit, generate object"
+          ),
+        chat: z
+          .string()
+          .describe(
+            "The reason why you do this opeartion, and tell me your anlyaise..."
+          ),
+      }),
+    });
+
+    operation = object.opeartion;
+    reasoning = r || "<no reasoning>";
+    chatContent = object.chat;
+    buyParams = object.buy;
+    adjustParams = object.adjustProfit;
+  }
+
+  // Execute / Save to DB logic (Unified)
+  // Map string operation to Prisma Enum if needed
+  let dbOp: Opeartion;
+  if (operation.toLowerCase() === 'buy') dbOp = Opeartion.Buy;
+  else if (operation.toLowerCase() === 'sell') dbOp = Opeartion.Sell;
+  else dbOp = Opeartion.Hold;
+
+  // --- EXECUTE TRADE ---
+  try {
+    if (dbOp === Opeartion.Buy && buyParams) {
+      // Assuming Limit Order
+      await exchange.createOrder(
+        tradingPair,
+        "limit",
+        "buy",
+        buyParams.amount,
+        buyParams.pricing
+      );
+    } else if (dbOp === Opeartion.Sell) {
+      // For Sell, we need logic to know how much to sell.
+      // The AI SDK schema has 'percentage', but Exbitron needs 'amount'.
+      // If model is AgentEvolver, we might need smarter logic or it returns amount.
+      // For now, simple logic: Sell entire position if 'Sell'
+      // Fetch balance of base asset
+      const balance = await exchange.fetchBalance();
+      const baseAsset = prismaSymbol.toString(); // BTC
+      const available = balance[baseAsset]?.free || 0;
+
+      if (available > 0) {
+          await exchange.createOrder(
+            tradingPair,
+            "market", // Market sell for simplicity/exiting
+            "sell",
+            available
+          );
+      }
+    }
+  } catch (err) {
+    console.error("Trade execution failed:", err);
+    chatContent += `\n\n[Execution Failed: ${err}]`;
+  }
+
+  if (dbOp === Opeartion.Buy) {
     await prisma.chat.create({
       data: {
-        reasoning: reasoning || "<no reasoning>",
-        chat: object.chat || "<no chat>",
-        userPrompt,
+        model: modelName,
+        reasoning: reasoning,
+        chat: chatContent,
+        userPrompt: modelType === 'agent_evolver' ? "Agent State Input" : "Prompt",
         tradings: {
           createMany: {
             data: {
-              symbol: Symbol.BTC,
-              opeartion: object.opeartion,
-              pricing: object.buy?.pricing,
-              amount: object.buy?.amount,
-              leverage: object.buy?.leverage,
+              symbol: prismaSymbol,
+              opeartion: dbOp,
+              pricing: buyParams?.pricing,
+              amount: buyParams?.amount,
+              leverage: buyParams?.leverage,
             },
           },
         },
@@ -94,17 +247,18 @@ export async function run(initialCapital: number) {
     });
   }
 
-  if (object.opeartion === Opeartion.Sell) {
+  if (dbOp === Opeartion.Sell) {
     await prisma.chat.create({
       data: {
-        reasoning: reasoning || "<no reasoning>",
-        chat: object.chat || "<no chat>",
-        userPrompt,
+        model: modelName,
+        reasoning: reasoning,
+        chat: chatContent,
+        userPrompt: modelType === 'agent_evolver' ? "Agent State Input" : "Prompt",
         tradings: {
           createMany: {
             data: {
-              symbol: Symbol.BTC,
-              opeartion: object.opeartion,
+              symbol: prismaSymbol,
+              opeartion: dbOp,
             },
           },
         },
@@ -112,24 +266,25 @@ export async function run(initialCapital: number) {
     });
   }
 
-  if (object.opeartion === Opeartion.Hold) {
+  if (dbOp === Opeartion.Hold) {
     const shouldAdjustProfit =
-      object.adjustProfit?.stopLoss && object.adjustProfit?.takeProfit;
+      adjustParams?.stopLoss && adjustParams?.takeProfit;
     await prisma.chat.create({
       data: {
-        reasoning: reasoning || "<no reasoning>",
-        chat: object.chat || "<no chat>",
-        userPrompt,
+        model: modelName,
+        reasoning: reasoning,
+        chat: chatContent,
+        userPrompt: modelType === 'agent_evolver' ? "Agent State Input" : "Prompt",
         tradings: {
           createMany: {
             data: {
-              symbol: Symbol.BTC,
-              opeartion: object.opeartion,
+              symbol: prismaSymbol,
+              opeartion: dbOp,
               stopLoss: shouldAdjustProfit
-                ? object.adjustProfit?.stopLoss
+                ? adjustParams?.stopLoss
                 : undefined,
               takeProfit: shouldAdjustProfit
-                ? object.adjustProfit?.takeProfit
+                ? adjustParams?.takeProfit
                 : undefined,
             },
           },
