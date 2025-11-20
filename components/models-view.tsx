@@ -216,7 +216,7 @@ export function ModelsView() {
               {/* Model info at bottom */}
               <div className="mt-3 pt-3 border-t">
                 <div className="text-xs text-muted-foreground">
-                  Model:{" "}
+                  Bot:{" "}
                   <span className="font-medium text-foreground">
                     {trade.model}
                   </span>
@@ -231,13 +231,13 @@ export function ModelsView() {
 
   const renderModelChat = () => {
     if (loading) {
-      return <div className="text-center py-8 text-sm">Loading chats...</div>;
+      return <div className="text-center py-8 text-sm">Loading bot activity...</div>;
     }
 
     if (chats.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground text-sm">
-          No chat history yet
+          No activity history yet
         </div>
       );
     }
@@ -289,7 +289,7 @@ export function ModelsView() {
                     <div>
                       <div className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
                         <span className="text-sm">📝</span>
-                        User Prompt
+                        System Prompt
                       </div>
                       <div className="bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
                         <div className="prose prose-sm max-w-none dark:prose-invert text-xs">
@@ -304,7 +304,7 @@ export function ModelsView() {
                     <div>
                       <div className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
                         <span className="text-sm">🧠</span>
-                        Chain of Thought
+                        Reasoning
                       </div>
                       <div className="bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
                         <div className="prose prose-sm max-w-none dark:prose-invert text-xs">
@@ -448,7 +448,7 @@ export function ModelsView() {
   return (
     <Card className="h-full flex flex-col overflow-hidden">
       <CardHeader className="pb-3 flex-shrink-0">
-        <CardTitle className="text-lg">Model Activity</CardTitle>
+        <CardTitle className="text-lg">Bot Activity</CardTitle>
         <CardDescription className="text-xs">
           Real-time trading decisions and AI reasoning
         </CardDescription>
@@ -464,7 +464,7 @@ export function ModelsView() {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            CHAT
+            ACTIVITY
           </button>
           <button
             onClick={() => setActiveTab("completed-trades")}

@@ -2,16 +2,55 @@ import { generateObject } from "ai";
 import { generateUserPrompt, tradingPrompt } from "./prompt";
 import { getCurrentMarketState } from "../trading/current-market-state";
 import { z } from "zod";
-import { deepseekR1 } from "./model";
+import {
+  deepseekR1,
+  gpt4o,
+  gemini15Pro,
+  getLocalModel,
+  getOpenRouterModel,
+} from "./model";
 import { getAccountInformationAndPerformance } from "../trading/account-information-and-performance";
 import { prisma } from "../prisma";
 import { Opeartion, Symbol } from "@prisma/client";
 
+// Helper to get the model based on env config or parameter
+function getActiveModel(modelName?: string) {
+  const configuredModel = modelName || process.env.ACTIVE_MODEL || "deepseek";
+
+  switch (configuredModel.toLowerCase()) {
+    case "openai":
+    case "gpt4o":
+      return { model: gpt4o, name: "GPT-4o" };
+    case "gemini":
+      return { model: gemini15Pro, name: "Gemini 1.5 Pro" };
+    case "local":
+      return {
+        model: getLocalModel(process.env.LOCAL_MODEL_ID),
+        name: "Local Model",
+      };
+    case "deepseek":
+    default:
+      // Default to DeepSeek via OpenRouter as per original setup
+      return { model: deepseekR1, name: "DeepSeek R1" };
+  }
+}
+
 /**
  * you can interval trading using cron job
  */
-export async function run(initialCapital: number) {
-  const currentMarketState = await getCurrentMarketState("BTC/USDT");
+export async function run(
+  initialCapital: number,
+  modelOverride?: string,
+  symbol: string = "BTC"
+) {
+  // Resolve symbol string to Enum if possible, or just use BTC as default for now if dynamic
+  // The Prisma schema expects specific Enums. If we support any symbol, we might need to update schema or map strings.
+  // For now, we'll stick to BTC/USDT for the main logic or basic mapping.
+  const prismaSymbol =
+    Object.values(Symbol).find((s) => s === symbol) || Symbol.BTC;
+  const tradingPair = `${prismaSymbol}/USDT`;
+
+  const currentMarketState = await getCurrentMarketState(tradingPair);
   const accountInformationAndPerformance =
     await getAccountInformationAndPerformance(initialCapital);
   // Count previous Chat entries to provide an invocation counter in the prompt
@@ -24,8 +63,10 @@ export async function run(initialCapital: number) {
     invocationCount,
   });
 
+  const { model, name: modelName } = getActiveModel(modelOverride);
+
   const { object, reasoning } = await generateObject({
-    model: deepseekR1,
+    model: model,
     system: tradingPrompt,
     prompt: userPrompt,
     output: "object",
@@ -76,13 +117,14 @@ export async function run(initialCapital: number) {
   if (object.opeartion === Opeartion.Buy) {
     await prisma.chat.create({
       data: {
+        model: modelName,
         reasoning: reasoning || "<no reasoning>",
         chat: object.chat || "<no chat>",
         userPrompt,
         tradings: {
           createMany: {
             data: {
-              symbol: Symbol.BTC,
+              symbol: prismaSymbol,
               opeartion: object.opeartion,
               pricing: object.buy?.pricing,
               amount: object.buy?.amount,
@@ -97,13 +139,14 @@ export async function run(initialCapital: number) {
   if (object.opeartion === Opeartion.Sell) {
     await prisma.chat.create({
       data: {
+        model: modelName,
         reasoning: reasoning || "<no reasoning>",
         chat: object.chat || "<no chat>",
         userPrompt,
         tradings: {
           createMany: {
             data: {
-              symbol: Symbol.BTC,
+              symbol: prismaSymbol,
               opeartion: object.opeartion,
             },
           },
@@ -117,13 +160,14 @@ export async function run(initialCapital: number) {
       object.adjustProfit?.stopLoss && object.adjustProfit?.takeProfit;
     await prisma.chat.create({
       data: {
+        model: modelName,
         reasoning: reasoning || "<no reasoning>",
         chat: object.chat || "<no chat>",
         userPrompt,
         tradings: {
           createMany: {
             data: {
-              symbol: Symbol.BTC,
+              symbol: prismaSymbol,
               opeartion: object.opeartion,
               stopLoss: shouldAdjustProfit
                 ? object.adjustProfit?.stopLoss
